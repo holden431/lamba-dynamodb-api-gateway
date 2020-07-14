@@ -1,0 +1,246 @@
+openapi: 3.0.1
+info:
+  title:
+    Users API
+  version: 1.0.0
+paths:
+  /users:
+    get:
+      responses:
+        200:
+          description: The request succeded and results are in the response message.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/responses/Users"
+              
+      x-amazon-apigateway-integration:
+        httpMethod: POST
+        type: AWS
+        uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/Scan" }
+        credentials: { "Fn::GetAtt": [ UsersAPIRole, Arn ] }
+        requestTemplates:
+          application/json:
+            Fn::Sub:
+              - |-
+                {
+                  "TableName": "${tableName}"
+                }
+              - { tableName: { Ref: UsersTable } }
+              
+        responses:
+          default:
+            statusCode: 200
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                          {
+                            "users": [
+                              #foreach($elem in $inputRoot.Items) {
+                                "id": "$elem.pk.S",
+                                "name": "$elem.usersname.S",
+                              }#if($foreach.hasNext),#end
+                              #end
+                            ]
+                          }'
+
+    post:
+      responses:
+        201:
+          $ref: "#/components/responses/Created"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Users'
+      x-amazon-apigateway-integration:
+        httpMethod: POST
+        type: AWS
+        uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/PutItem" }
+        credentials: { "Fn::GetAtt": [ UsersAPIRole, Arn ] }
+        requestTemplates:
+          application/json: 
+            Fn::Sub:
+              - |- 
+                { 
+                  "TableName": "${tableName}",
+                  "Item": {
+                    "pk": {
+                      "S": "$context.requestId"
+                    },
+                    "usersname": {
+                      "S": "$input.path("$.name")"
+                    }
+                  }
+                }
+              - { tableName: { Ref: UsersTable } }
+        responses:
+          default:
+            statusCode: 201
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                {
+                    "id": "$context.requestId"
+                }'
+  /users/{usersId}:
+    get:
+      parameters:
+        - name: "usersId"
+          in: "path"
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          $ref: "#/components/responses/Users"
+      x-amazon-apigateway-integration:
+        httpMethod: POST
+        type: AWS
+        uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/GetItem" }
+        credentials: { "Fn::GetAtt": [ UsersAPIRole, Arn ] }
+        requestTemplates:
+          application/json:
+            Fn::Sub: 
+              - |-
+                { 
+                  "TableName": "${tableName}",
+                  "Key": {
+                          "pk": {
+                            "S": "$input.params("usersId")"
+                          }
+                        }
+                }
+              - { tableName: { Ref: UsersTable } }
+        responses:
+          default:
+            statusCode: 200
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                {
+                    "id": "$inputRoot.Item.pk.S",
+                    "name": "$inputRoot.Item.usersname.S"
+                }'
+
+    put:
+      parameters:
+        - name: "usersId"
+          in: "path"
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          $ref: "#/components/responses/Empty"
+      x-amazon-apigateway-integration:
+        httpMethod: POST
+        type: AWS
+        uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/UpdateItem" }
+        credentials: { "Fn::GetAtt": [ UsersAPIRole, Arn ] }
+        requestTemplates:
+          application/json: 
+            Fn::Sub: 
+              - |-
+                { 
+                  "TableName": "${tableName}",
+                  "Key": {
+                          "pk": {
+                            "S": "$input.params("usersId")"
+                          }
+                        },
+                  "UpdateExpression": "SET usersname = :name",
+                  "ExpressionAttributeValues": {
+                    ":name":  {
+                                "S": "$input.path("$.name")"
+                              }
+                  }
+                }
+              - { tableName: { Ref: UsersTable } }
+        responses:
+          default:
+            statusCode: 204
+
+    delete:
+      parameters:
+      - name: "usersId"
+        in: "path"
+        required: true
+        schema:
+            type: string
+      responses:
+        200:
+          description: "200 response"
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/responses/Empty'
+      x-amazon-apigateway-integration:
+        credentials: { "Fn::GetAtt": [ UsersAPIRole, Arn ] }
+        uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/DeleteItem" }
+        requestTemplates:
+          application/json:  
+            Fn::Sub: 
+              - |-
+                {
+                  "TableName": "${tableName}",
+                    "Key": {
+                      "pk": {
+                        "S": "$input.params("usersId")"
+                      }
+                    },
+                  "ReturnValues": "ALL_OLD"
+                }
+              - { tableName: { Ref: UsersTable } }
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws"
+
+components:
+  schemas:
+    Empty:
+      type: object
+      description: Empty Schema
+    Users:
+      type: object
+      description: Users
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+  responses:
+    Created: #201
+      description: The request succeeded and created a new resource.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+            required:
+              - id
+    Empty:
+      description: Empty Schema
+      content:
+        application/json:
+          schema:
+            type: object
+
+    Users:
+      description: Users
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - name
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+                

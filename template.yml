@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Users API
+
+Resources:
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: users
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 3
+
+  UsersAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+        StageName: Lambdausers
+        DefinitionBody:
+          'Fn::Transform':
+            Name: AWS::Include
+            Parameters:
+              Location: s3://BUCKET_NAME/users-openapi.yaml
+              
+  UsersAPIRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        -
+          PolicyName: UsersAPIPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                - "dynamodb:PutItem"
+                - "dynamodb:UpdateItem"
+                - "dynamodb:DeleteItem"
+                - "dynamodb:GetItem"
+                - "dynamodb:Scan"
+
+                Resource: !GetAtt UsersTable.Arn
